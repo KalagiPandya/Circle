@@ -14,6 +14,6 @@ services:
       - key: CLIENT_URL
         value: "*"
       - key: JWT_SECRET
-        generateValue: true
+        value: circle_super_secret_jwt_key_2026_prod
       - key: MONGODB_URI
-        sync: false
+        value: mongodb+srv://pandyakalagi_db_user:CircleApp123!@cluster0.r1scdvy.mongodb.net/circle?retryWrites=true&w=majority
