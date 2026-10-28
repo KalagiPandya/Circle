@@ -12,7 +12,9 @@ services:
       - key: PORT
         value: 10000
       - key: CLIENT_URL
-        value: "*"
+        value: "https://circle-wheat-eight.vercel.app"
+      - key: FRONTEND_URL
+        value: "https://circle-wheat-eight.vercel.app"
       - key: JWT_SECRET
         value: circle_super_secret_jwt_key_2026_prod
       - key: MONGODB_URI

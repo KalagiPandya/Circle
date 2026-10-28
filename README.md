@@ -194,7 +194,7 @@ Or register a new account at `/signup`
 
 | Service | Platform | URL |
 |---------|----------|-----|
-| Frontend | Vercel | `(Deploying on Vercel)` |
+| Frontend | Vercel | [`https://circle-wheat-eight.vercel.app`](https://circle-wheat-eight.vercel.app) |
 | Backend | Render | [`https://circle-api-77v3.onrender.com`](https://circle-api-77v3.onrender.com) |
 | Database | MongoDB Atlas | Cluster0 (AWS Mumbai) |
 
