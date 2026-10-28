@@ -1,0 +1,331 @@
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import PasswordStrength from './PasswordStrength';
+import InterestSelector from './InterestSelector';
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL;
+
+import { useGoogleLogin } from '@react-oauth/google';
+
+const SignupForm = () => {
+    const navigate = useNavigate();
+    const [showPassword, setShowPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        username: '',
+        email: '',
+        password: ''
+    });
+    const [selectedInterests, setSelectedInterests] = useState([]);
+    const [errors, setErrors] = useState({});
+    const [serverError, setServerError] = useState('');
+
+    const handleGoogleLogin = useGoogleLogin({
+        onSuccess: async (tokenResponse) => {
+            setIsLoading(true);
+            setServerError('');
+            try {
+                const response = await axios.post('/api/auth/google', { token: tokenResponse.access_token });
+                
+                localStorage.setItem('token', response.data.token);
+                localStorage.setItem('user', JSON.stringify(response.data.user));
+                localStorage.setItem('userInterests', JSON.stringify(selectedInterests));
+
+                axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+
+                if (response.data.user.role === 'admin') {
+                    window.location.href = '/admin';
+                } else {
+                    window.location.href = '/feed';
+                }
+            } catch (error) {
+                console.error('Google Auth error:', error);
+                setServerError(error.response?.data?.message || 'Google Signup Failed.');
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        onError: () => {
+            setServerError('Google Signup was cancelled or failed.');
+        }
+    });
+
+    useEffect(() => {
+        axios.defaults.baseURL = API_URL;
+    }, []);
+
+    // Load interests from localStorage on component mount
+    useEffect(() => {
+        const savedInterests = localStorage.getItem('userInterests');
+        if (savedInterests) {
+            setSelectedInterests(JSON.parse(savedInterests));
+        }
+    }, []);
+
+    const validate = () => {
+        const newErrors = {};
+
+        // Username validation (optional)
+        if (formData.username) {
+            if (formData.username.length < 3) {
+                newErrors.username = 'Username must be at least 3 characters';
+            } else if (formData.username.length > 25) {
+                newErrors.username = 'Username must be less than 25 characters';
+            } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+                newErrors.username = 'Username can only contain letters, numbers, and underscores';
+            }
+        }
+
+        // Email validation
+        if (!formData.email) {
+            newErrors.email = 'Email is required';
+        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+            newErrors.email = 'Please enter a valid email';
+        }
+
+        // Password validation
+        if (!formData.password) {
+            newErrors.password = 'Password is required';
+        } else if (formData.password.length < 8) {
+            newErrors.password = 'Password must be at least 8 characters';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: '' }));
+        }
+        setServerError('');
+    };
+
+    const handleInterestsChange = (interests) => {
+        setSelectedInterests(interests);
+        if (errors.interests) {
+            setErrors(prev => ({ ...prev, interests: '' }));
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!validate()) {
+            return;
+        }
+
+        setIsLoading(true);
+        setServerError('');
+
+        try {
+            // Send ONLY the fields your backend expects
+            const requestData = {
+                email: formData.email,
+                password: formData.password
+            };
+
+            // Only include username if provided
+            if (formData.username) {
+                requestData.username = formData.username;
+            }
+
+            console.log('Sending to backend:', requestData);
+
+            // ✅ Use relative path - baseURL is set from env
+            const response = await axios.post('/api/auth/register', requestData);
+
+            if (response.data.success) {
+                // Store auth data
+                localStorage.setItem('token', response.data.token);
+                localStorage.setItem('user', JSON.stringify(response.data.user));
+
+                // Store interests separately in localStorage
+                localStorage.setItem('userInterests', JSON.stringify(selectedInterests));
+
+                // Set default Authorization header
+                axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+
+                // Show success message
+                //  alert('🎉 Registration successful!');
+
+                // Redirect to dashboard
+                window.location.href = '/feed';
+            }
+        } catch (error) {
+            console.error('Registration error:', error);
+
+            if (error.response) {
+                const { field, message } = error.response.data;
+                if (field) {
+                    setErrors(prev => ({ ...prev, [field]: message }));
+                } else {
+                    setServerError(message || 'Registration failed. Please try again.');
+                }
+            } else if (error.request) {
+                setServerError('Cannot connect to server. Please check your internet connection.');
+            } else {
+                setServerError('An unexpected error occurred.');
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="w-full lg:w-1/2 bg-[#10002B] flex flex-col justify-center px-8 md:px-16 lg:px-24 py-12 overflow-y-auto">
+            <div className="max-w-md w-full mx-auto">
+                <div className="mb-10">
+                    <h2 className="text-4xl font-bold mb-2 text-white font-sans">Join the Circle</h2>
+                    <p className="text-white/40">Step away from the noise. Start your journey.</p>
+                </div>
+
+                {serverError && (
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-3 text-red-500">
+                        <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">{serverError}</span>
+                    </div>
+                )}
+
+                <form className="space-y-6" onSubmit={handleSubmit}>
+                    {/* Google Auth Button */}
+                    <button
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => handleGoogleLogin()}
+                        className="w-full flex items-center justify-center space-x-3 bg-white hover:bg-white/90 text-black font-semibold py-3 rounded-xl transition-all"
+                    >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                        </svg>
+                        <span>Sign up with Google</span>
+                    </button>
+
+                    <div className="relative flex items-center">
+                        <div className="flex-grow border-t border-white/10"></div>
+                        <span className="flex-shrink mx-4 text-white/20 text-sm uppercase tracking-widest font-bold">or</span>
+                        <div className="flex-grow border-t border-white/10"></div>
+                    </div>
+
+                    {/* Username (Optional) */}
+                    <div className="space-y-1">
+                        <label className="block text-xs font-bold text-white/50 uppercase tracking-widest">
+                            Username <span className="text-white/30">(optional)</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="username"
+                            value={formData.username}
+                            onChange={handleChange}
+                            className={`auth-input ${errors.username ? 'border-red-500/50 focus:ring-red-500/50' : ''}`}
+                            placeholder="jane_doe"
+                        />
+                        {errors.username && (
+                            <div className="flex items-center mt-1 text-red-500 text-xs gap-1">
+                                <AlertCircle size={12} />
+                                <span>{errors.username}</span>
+                            </div>
+                        )}
+                        <p className="text-xs text-white/30 mt-1">
+                            If left empty, we'll create one from your email
+                        </p>
+                    </div>
+
+                    {/* Email */}
+                    <div className="space-y-1">
+                        <label className="block text-xs font-bold text-white/50 uppercase tracking-widest">Email Address *</label>
+                        <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            className={`auth-input ${errors.email ? 'border-red-500/50 focus:ring-red-500/50' : ''}`}
+                            placeholder="jane@example.com"
+                        />
+                        {errors.email && (
+                            <div className="flex items-center mt-1 text-red-500 text-xs gap-1">
+                                <AlertCircle size={12} />
+                                <span>{errors.email}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Password */}
+                    <div className="space-y-1">
+                        <label className="block text-xs font-bold text-white/50 uppercase tracking-widest">Password *</label>
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                name="password"
+                                value={formData.password}
+                                onChange={handleChange}
+                                className={`auth-input ${errors.password ? 'border-red-500/50 focus:ring-red-500/50' : ''}`}
+                                placeholder="••••••••"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                            >
+                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </button>
+                        </div>
+                        {errors.password && (
+                            <div className="flex items-center mt-1 text-red-500 text-xs gap-1">
+                                <AlertCircle size={12} />
+                                <span>{errors.password}</span>
+                            </div>
+                        )}
+                        <PasswordStrength password={formData.password} />
+                    </div>
+
+                    {/* Interests - Only stored in localStorage */}
+                    <div className="space-y-2">
+                        <label className="block text-xs font-bold text-white/50 uppercase tracking-widest">
+                            Select Your Interests <span className="text-white/30">(for personalized stories)</span>
+                        </label>
+                        <InterestSelector
+                            selectedInterests={selectedInterests}
+                            onChange={handleInterestsChange}
+                        />
+                        {errors.interests && (
+                            <div className="flex items-center mt-1 text-red-500 text-xs gap-1">
+                                <AlertCircle size={12} />
+                                <span>{errors.interests}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isLoading ? (
+                            <>
+                                <Loader2 size={20} className="animate-spin" />
+                                Creating Account...
+                            </>
+                        ) : (
+                            'Create Account'
+                        )}
+                    </button>
+
+                    <p className="text-center text-sm text-white/40 mt-8 font-sans">
+                        Already have an account? <Link to="/login" className="text-white hover:underline font-bold">Log in</Link>
+                    </p>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default SignupForm;

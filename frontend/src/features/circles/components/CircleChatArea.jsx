@@ -1,0 +1,701 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { Send, Smile, Heart, Reply, X, ChevronDown, User, Heart as HeartIcon, Coffee, Music, Camera, Trash2 } from 'lucide-react';
+import { io } from 'socket.io-client';
+import axios from 'axios';
+
+/* ── date separator ── */
+const DateDivider = ({ date }) => (
+    <div className="flex items-center gap-4 my-8">
+        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        <span className="text-[10px] font-bold text-gray-500 tracking-wide px-4 py-1 rounded-full bg-white/5 border border-white/5">
+            {date}
+        </span>
+        <div className="flex-1 h-px bg-gradient-to-l from-transparent via-white/10 to-transparent" />
+    </div>
+);
+
+/* ── single message bubble ──────────────────────────── */
+const ChatMessage = ({ msg, onToggleReaction, onReply, onDelete, isModerator }) => {
+    const isMe = msg.isMe;
+    const likedByMe = msg.likedByMe;
+    const canDelete = isMe || isModerator;
+    const [showActionsMobile, setShowActionsMobile] = useState(false);
+
+    const renderMessageText = (text) => {
+        if (!text) return null;
+        const parts = text.split(/(@\w+)/g);
+        return parts.map((part, i) => {
+            if (part.startsWith('@')) {
+                const username = part.slice(1);
+                return (
+                    <Link 
+                        key={i} 
+                        to={`/profile/${username}`}
+                        className="text-violet-300 font-bold hover:text-white transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {part}
+                    </Link>
+                );
+            }
+            return part;
+        });
+    };
+
+    return (
+        <div className={`flex gap-3 group animate-in fade-in slide-in-from-bottom-2 duration-300 ${isMe ? 'flex-row-reverse' : ''}`}>
+            {/* Avatar */}
+            {!isMe && (
+                <Link to={`/profile/${msg.username}`} className="shrink-0 pt-1 active:scale-95 transition-transform">
+                    <img
+                        src={msg.avatar}
+                        alt={msg.name}
+                        className="w-8 h-8 rounded-full object-cover ring-2 ring-white/5 hover:ring-violet-500/50 transition-all"
+                    />
+                </Link>
+            )}
+
+            <div className={`flex flex-col max-w-[85%] ${isMe ? 'items-end' : 'items-start'}`}>
+                {/* Name and time */}
+                <div className={`flex items-baseline gap-2 mb-1.5 px-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+                    <Link to={`/profile/${msg.username}`} className={`text-[11px] font-bold tracking-wide hover:text-white transition-colors ${isMe ? 'text-violet-300' : 'text-gray-400'}`}>
+                        {isMe ? 'You' : msg.name}
+                    </Link>
+                    <span className="text-[10px] text-gray-600 font-medium">{msg.time}</span>
+                </div>
+
+                {/* Bubble Container */}
+                <div className={`relative px-4 py-2.5 rounded-2xl border transition-all duration-300 group shadow-sm ${
+                    msg.isDeleted
+                        ? 'bg-red-500/5 border-red-500/20 italic'
+                        : isMe
+                            ? 'bg-violet-600/30 border-violet-500/40 rounded-tr-none shadow-violet-900/10'
+                            : 'bg-[#1a1138]/60 border-white/5 backdrop-blur-md rounded-tl-none shadow-black/20'
+                }`}>
+                    
+                    {/* Reply To Preview (Nested in bubble) */}
+                    {!msg.isDeleted && msg.replyTo && (
+                        <div className={`mb-2 p-2 rounded-lg text-xs border-l-4 overflow-hidden ${isMe ? 'bg-violet-900/40 border-violet-400' : 'bg-black/20 border-gray-500'}`}>
+                            <p className="font-bold text-[10px] mb-0.5 text-violet-300">{msg.replyTo.name}</p>
+                            <p className="line-clamp-1 opacity-60 text-gray-300">{msg.replyTo.text}</p>
+                        </div>
+                    )}
+
+                    <p 
+                        className={`text-sm leading-relaxed whitespace-pre-wrap selection:bg-violet-500/40 cursor-pointer md:cursor-auto ${msg.isDeleted ? 'text-gray-500' : 'text-gray-200'}`}
+                        onClick={() => setShowActionsMobile(!showActionsMobile)}
+                    >
+                        {msg.isDeleted ? 'This message was deleted because it offends this circle' : renderMessageText(msg.text)}
+                    </p>
+
+                    {/* Hover Actions Bar */}
+                    {!msg.isDeleted && (
+                        <div className={`absolute -bottom-3 ${isMe ? 'right-2' : 'left-2'} ${showActionsMobile ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} md:opacity-0 md:group-hover:opacity-100 transition-all duration-200 flex items-center gap-0.5 p-0.5 bg-[#12082A] border border-white/10 rounded-full shadow-2xl backdrop-blur-xl z-20 md:pointer-events-none md:group-hover:pointer-events-auto scale-90 origin-top`}>
+                            <button 
+                                onClick={() => onReply(msg)}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all" 
+                                title="Reply"
+                            >
+                                <Reply size={12} />
+                            </button>
+                            <button 
+                                onClick={() => onToggleReaction(msg.id)}
+                                className={`p-1.5 rounded-full transition-all ${likedByMe ? 'text-red-500 bg-red-500/10' : 'text-gray-400 hover:text-red-400 hover:bg-white/10'}`} 
+                                title={likedByMe ? "Unlike" : "Like"}
+                            >
+                                <Heart size={12} fill={likedByMe ? "currentColor" : "none"} />
+                            </button>
+                            {canDelete && (
+                                <button 
+                                    onClick={() => onDelete(msg.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-white/10 rounded-full transition-all" 
+                                    title="Delete"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Visible Reactions */}
+                {msg.reactions?.length > 0 && (
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                        {msg.reactions.map((r, i) => (
+                            <button
+                                key={i}
+                                onClick={() => onToggleReaction(msg.id, r.icon)}
+                                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] transition-all ${
+                                    likedByMe && r.icon === '❤️'
+                                    ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                                    : 'bg-white/5 border-white/5 text-gray-400 hover:bg-violet-500/20'
+                                }`}
+                            >
+                                <span>{r.icon}</span>
+                                <span className="font-bold">{r.count}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+/* ── main component ──────────────────────────────────── */
+const CircleChatArea = ({ circle }) => {
+    const circleId = circle?._id;
+    const circleName = circle?.name;
+    const members = circle?.members || [];
+    const memberCount = circle?.stats?.memberCount || members.length;
+    const [messageInput, setMessageInput] = useState('');
+    const [messages, setMessages] = useState([]);
+    const [replyingTo, setReplyingTo] = useState(null);
+    const endRef = useRef(null);
+    const scrollRef = useRef(null);
+    const socketRef = useRef(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [activeEmojiCategory, setActiveEmojiCategory] = useState('smileys');
+    const [showScrollButton, setShowScrollButton] = useState(false);
+    const [hasNewMessages, setHasNewMessages] = useState(false);
+    const emojiPickerRef = useRef(null);
+    
+    // Mention States
+    const [showMentions, setShowMentions] = useState(false);
+    const [mentionFilter, setMentionFilter] = useState('');
+    const [mentionIndex, setMentionIndex] = useState(-1);
+    const [selectedMentionIdx, setSelectedMentionIdx] = useState(0);
+    const mentionListRef = useRef(null);
+
+    const emojiCategories = [
+        { id: 'smileys', icon: <Smile size={16} />, emojis: ['😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😮‍💨', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😶‍🌫️', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '😵‍💫', '🤐', '🥴', '🤢', '🤮', '🤧', '🤨', '🧐'] },
+        { id: 'hearts', icon: <HeartIcon size={16} />, emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆒', '🆓', 'ℹ️', '🆔', 'Ⓜ️', '🆕', '🆖', '🆗', '🆙', '🆚', '🈁', '🈂️', '🈚', '🈯', '🈲'] },
+        { id: 'food', icon: <Coffee size={16} />, emojis: ['🍎', '🍏', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌽', '🥕', '🫑', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🥪', '🥙', '🧆', '🌮', '🌯', '🍛', '🍜', '🍲', '🍱', '🍣', '🍤', '🍿', '🥟', '🍳', '🥡', '🍚', '🍙', '🍘', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯'] },
+        { id: 'activities', icon: <Music size={16} />, emojis: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🎱', '🎳', '🏏', '🏑', '🏒', '🏓', '🏸', '🥊', '🥋', '🥅', '⛳', '⛸️', '🎣', '🤿', '🎿', '🏂', '🛷', '🛼', '🎯', '🪀', '🪁', '🎮', '🕹️', '🎰', '🎲', '🧩', '🧸', '🪅', '🪆', '🎨', '🖼️', '🧵', '🪡', '🧶', '🎬', '🎤', '🎧', '📻', '🎸', '🎹', '🎺', '🎻', '🪕', '🥁', '🪘', '🎷'] },
+        { id: 'objects', icon: <Camera size={16} />, emojis: ['⌚', '📱', '📲', '💻', '⌨️', '🖱️', '🖨️', '🕹️', '🗜️', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽️', '🎞️', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙️', '🎚️', '🎛️', '🧭', '⏱️', '⏲️', '⏰', '🕰️', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯️', '🧱', '🪜', '🧯', '🛢️', '💸', '💵', '💴', '💶', '💷', '🪙', '💰', '💳', '💎', '⚖️', '🦯', '🛒', '🚬', '⚰️', '⚱️', '🪦', '🧿', '🔮', '🧿', '🧿'] }
+    ];
+
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const currentUserId = currentUser._id || currentUser.id;
+    const [isMuted, setIsMuted] = useState(false);
+    const [mutedUntil, setMutedUntil] = useState(null);
+    const [isModerator, setIsModerator] = useState(false);
+
+    // Check permissions
+    useEffect(() => {
+        if (!circle || !currentUserId) return;
+        const member = circle.members?.find(m => (m.user?._id || m.user) === currentUserId);
+        
+        if (member?.isMuted) {
+            const until = member.mutedUntil ? new Date(member.mutedUntil) : null;
+            if (!until || until > new Date()) {
+                setIsMuted(true);
+                setMutedUntil(until);
+            }
+        } else {
+            setIsMuted(false);
+            setMutedUntil(null);
+        }
+
+        const isMod = (circle.creator?._id || circle.creator) === currentUserId || 
+                     ['admin', 'moderator'].includes(member?.role);
+        setIsModerator(isMod);
+
+    }, [circle, currentUserId]);
+
+    const scrollToBottom = () => {
+        endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        setHasNewMessages(false);
+    };
+
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e?.currentTarget || scrollRef.current || {};
+        if (scrollHeight === undefined) return;
+        const distance = scrollHeight - scrollTop - clientHeight;
+        if (distance > 20) setShowScrollButton(true);
+        else {
+            setShowScrollButton(false);
+            setHasNewMessages(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+                setShowEmojiPicker(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    // Fetch messages
+    useEffect(() => {
+        if (!circleId) return;
+        const fetchMessages = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.get(`${backendUrl}/api/circlemessages/${circleId}/messages`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (res.data.messages) {
+                    const formatted = res.data.messages.map(msg => formatBackendMessage(msg, currentUserId));
+                    setMessages(formatted);
+                }
+            } catch (err) {
+                console.error("Failed to fetch circle messages", err);
+            }
+        };
+        fetchMessages();
+    }, [circleId, backendUrl, currentUserId]);
+
+    // Socket connection
+    useEffect(() => {
+        if (!circleId) return;
+
+        const token = localStorage.getItem('token');
+        socketRef.current = io(backendUrl, {
+            auth: { token }
+        });
+
+        socketRef.current.on('connect', () => {
+            socketRef.current.emit('join_circle', circleId);
+        });
+
+        socketRef.current.on('newCircleMessage', (newMsg) => {
+            const senderId = newMsg.sender?._id || newMsg.sender;
+            if (senderId !== currentUserId) {
+                setMessages(prev => [...prev, formatBackendMessage(newMsg, currentUserId)]);
+                const element = scrollRef.current;
+                if (element && element.scrollHeight - element.scrollTop - element.clientHeight > 150) {
+                    setHasNewMessages(true);
+                }
+            }
+        });
+
+        socketRef.current.on('circleMessageReacted', ({ messageId, reactions }) => {
+            setMessages(prev => prev.map(msg => 
+                msg.id === messageId 
+                ? { 
+                    ...msg, 
+                    reactions: reactions.map(r => ({ icon: r.emoji, count: r.users?.length || 1 })),
+                    likedByMe: reactions.some(r => r.emoji === '❤️' && r.users.some(u => (u._id || u) === currentUserId))
+                  } 
+                : msg
+            ));
+        });
+
+        socketRef.current.on('circleMessageDeleted', ({ messageId }) => {
+            setMessages(prev => prev.map(msg => 
+                msg.id === messageId ? { ...msg, isDeleted: true } : msg
+            ));
+        });
+
+        return () => {
+            if (socketRef.current) {
+                socketRef.current.emit('leave_circle', circleId);
+                socketRef.current.disconnect();
+            }
+        };
+    }, [circleId, backendUrl, currentUserId]);
+
+    const formatBackendMessage = (msg, myUserId) => {
+        const senderId = msg.sender?._id || msg.sender;
+        const isMe = senderId === myUserId;
+        const heartReaction = msg.reactions?.find(r => r.emoji === '❤️');
+        const likedByMe = heartReaction?.users?.some(u => (u._id || u) === myUserId);
+
+        return {
+            id: msg._id || Date.now(),
+            username: msg.sender?.username,
+            name: msg.sender?.displayName || msg.sender?.username || 'Unknown',
+            time: new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            text: msg.content?.text || '',
+            reactions: msg.reactions?.map(r => ({ icon: r.emoji, count: r.users?.length || 1, users: r.users })) || [],
+            avatar: msg.sender?.profilePic || `https://ui-avatars.com/api/?name=${msg.sender?.username || 'U'}&background=random`,
+            isMe,
+            likedByMe,
+            isDeleted: msg.isDeleted,
+            replyTo: msg.replyTo ? {
+                id: msg.replyTo._id,
+                name: (msg.replyTo.sender?._id || msg.replyTo.sender) === myUserId ? 'You' : (msg.replyTo.sender?.displayName || msg.replyTo.sender?.username || 'Unknown'),
+                text: msg.replyTo.content?.text || 'Media'
+            } : null,
+            date: new Date(msg.createdAt || Date.now()).toLocaleDateString()
+        };
+    };
+
+    const handleToggleReaction = async (messageId, emoji = '❤️') => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.post(`${backendUrl}/api/circlemessages/${circleId}/messages/${messageId}/react`, 
+                { emoji },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            if (res.data.reactions) {
+                setMessages(prev => prev.map(msg => 
+                    msg.id === messageId 
+                    ? { 
+                        ...msg, 
+                        reactions: res.data.reactions.map(r => ({ icon: r.emoji, count: r.users?.length || 1 })),
+                        likedByMe: res.data.reactions.some(r => r.emoji === '❤️' && r.users.some(u => (u._id || u) === currentUserId))
+                      } 
+                    : msg
+                ));
+            }
+        } catch (err) {
+            console.error("Failed to toggle reaction", err);
+        }
+    };
+    
+    // Mention Logic
+    const handleInputChange = (val, cursorIdx) => {
+        setMessageInput(val);
+        
+        const textBeforeCursor = val.substring(0, cursorIdx);
+        const lastAtIdx = textBeforeCursor.lastIndexOf('@');
+        
+        if (lastAtIdx !== -1) {
+            // Check if @ is at start or preceded by space
+            const charBeforeAt = lastAtIdx === 0 ? ' ' : textBeforeCursor[lastAtIdx - 1];
+            if (charBeforeAt === ' ' || charBeforeAt === '\n') {
+                const afterAt = textBeforeCursor.slice(lastAtIdx + 1);
+                if (!afterAt.includes(' ')) {
+                    setShowMentions(true);
+                    setMentionFilter(afterAt);
+                    setMentionIndex(lastAtIdx);
+                    setSelectedMentionIdx(0);
+                    return;
+                }
+            }
+        }
+        setShowMentions(false);
+    };
+
+    const handleMentionSelect = (userToMention) => {
+        if (!userToMention) return;
+        const before = messageInput.slice(0, mentionIndex);
+        const after = messageInput.slice(mentionIndex + mentionFilter.length + 1);
+        setMessageInput(`${before}@${userToMention.username} ${after}`);
+        setShowMentions(false);
+    };
+
+    // Auto-scroll mention list
+    useEffect(() => {
+        if (showMentions && mentionListRef.current) {
+            const activeItem = mentionListRef.current.children[selectedMentionIdx];
+            if (activeItem) {
+                activeItem.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest'
+                });
+            }
+        }
+    }, [selectedMentionIdx, showMentions]);
+
+    // Ensure admin/creator is included in the list for others to tag
+    const allPotentialMembers = (() => {
+        const list = [...members];
+        const creator = circle.creator;
+        if (creator) {
+            const creatorId = creator._id || creator;
+            const isCreatorInMembers = list.some(m => (m.user?._id || m.user) === creatorId);
+            if (!isCreatorInMembers) {
+                list.unshift({ user: creator, role: 'admin' });
+            }
+        }
+        return list;
+    })();
+
+    const filteredMembers = allPotentialMembers.filter(m => {
+        const u = m.user;
+        if (!u) return false;
+        const uid = u._id || u;
+        if (uid.toString() === currentUserId.toString()) return false;
+        
+        const search = mentionFilter.toLowerCase();
+        const displayName = (u.displayName || u.username || '').toLowerCase();
+        const username = (u.username || '').toLowerCase();
+        
+        return displayName.includes(search) || username.includes(search);
+    }).slice(0, 10);
+
+    const handleInputKeyDown = (e) => {
+        if (showMentions && filteredMembers.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedMentionIdx(prev => (prev + 1) % filteredMembers.length);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedMentionIdx(prev => (prev - 1 + filteredMembers.length) % filteredMembers.length);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                handleMentionSelect(filteredMembers[selectedMentionIdx].user);
+            } else if (e.key === 'Escape') {
+                setShowMentions(false);
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSend(e);
+        }
+    };
+
+    const handleDeleteMessage = async (messageId) => {
+        if (!window.confirm('Delete this message?')) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`${backendUrl}/api/circlemessages/${circleId}/messages/${messageId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setMessages(prev => prev.map(msg => 
+                msg.id === messageId ? { ...msg, isDeleted: true } : msg
+            ));
+        } catch (err) {
+            console.error("Failed to delete message", err);
+        }
+    };
+
+    const handleSend = async (e) => {
+        if (e) e.preventDefault();
+        const textToSubmit = messageInput.trim();
+        if (!textToSubmit || !circleId) return;
+
+        const tempId = Date.now();
+        const tempMsg = {
+            id: tempId,
+            username: currentUser.username,
+            name: currentUser.displayName || currentUser.username || 'You',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            text: textToSubmit,
+            reactions: [],
+            avatar: currentUser.profilePic || `https://ui-avatars.com/api/?name=${currentUser.username || 'U'}&background=random`,
+            isMe: true,
+            replyTo: replyingTo ? { name: replyingTo.name, text: replyingTo.text } : null,
+            date: new Date().toLocaleDateString()
+        };
+
+        setMessages(prev => [...prev, tempMsg]);
+        setMessageInput('');
+        const replyId = replyingTo?.id;
+        setReplyingTo(null);
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.post(`${backendUrl}/api/circlemessages/${circleId}/messages`, {
+                content: { text: textToSubmit },
+                replyTo: replyId
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setMessages(prev => prev.map(m => m.id === tempId ? formatBackendMessage(res.data.message, currentUserId) : m));
+        } catch (err) {
+            console.error("Failed to send message", err);
+            setMessages(prev => prev.filter(m => m.id !== tempId));
+            alert(err.response?.data?.error || "Failed to send message");
+        }
+    };
+
+    const groupedMessages = messages.reduce((acc, msg) => {
+        if (!acc[msg.date]) acc[msg.date] = [];
+        acc[msg.date].push(msg);
+        return acc;
+    }, {});
+
+    return (
+        <div
+            className="flex-1 flex flex-col rounded-3xl border border-[#2A1550] overflow-hidden shadow-2xl relative w-full h-[600px] lg:h-[calc(100vh-380px)]"
+            style={{
+                background: 'linear-gradient(160deg, #12082A 0%, #1A0D40 100%)'
+            }}
+        >
+            {/* Header */}
+            <div className="px-6 py-3 border-b border-white/5 bg-white/2 backdrop-blur-md flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-xs font-bold text-gray-300 uppercase tracking-widest">{circleName || 'Live Chat'}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="flex -space-x-2">
+                        {members.slice(0, 4).map((m, i) => (
+                            <img 
+                                key={i} 
+                                src={m.user?.profilePic || `https://ui-avatars.com/api/?name=${m.user?.username || 'U'}&background=random`} 
+                                alt=""
+                                className="w-6 h-6 rounded-full border-2 border-[#12082A] object-cover"
+                            />
+                        ))}
+                    </div>
+                    {memberCount > 4 && (
+                        <span className="text-[10px] font-bold text-gray-400">
+                            +{memberCount - 4} others
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* Messages */}
+            <div 
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto px-6 py-4 space-y-2 no-scrollbar relative"
+            >
+                {Object.keys(groupedMessages).length === 0 ? (
+                    <div className="flex justify-center mt-10 text-gray-500 italic">
+                        No messages yet. Start the conversation!
+                    </div>
+                ) : (
+                    Object.entries(groupedMessages).map(([date, msgs]) => (
+                        <div key={date}>
+                            <DateDivider date={date} />
+                            {msgs.map(msg => (
+                                <ChatMessage 
+                                    key={msg.id} 
+                                    msg={msg} 
+                                    onToggleReaction={handleToggleReaction}
+                                    onReply={setReplyingTo}
+                                    onDelete={handleDeleteMessage}
+                                    isModerator={isModerator}
+                                />
+                            ))}
+                        </div>
+                    ))
+                )}
+                <div ref={endRef} className="h-4" />
+            </div>
+
+            {/* Scroll Button */}
+            {showScrollButton && (
+                <button
+                    onClick={scrollToBottom}
+                    className="absolute bottom-28 right-6 p-4 rounded-full bg-violet-600 text-white shadow-2xl hover:bg-violet-500 transition-all z-50 flex items-center justify-center group"
+                >
+                    <ChevronDown size={24} className="group-hover:translate-y-0.5 transition-transform" />
+                    {hasNewMessages && (
+                        <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-[#12082A] animate-pulse" />
+                    )}
+                </button>
+            )}
+
+            {/* Input Bar */}
+            <div className="p-6 bg-gradient-to-t from-[#12082A] to-transparent relative">
+                
+                {/* Mentions */}
+                {showMentions && filteredMembers.length > 0 && (
+                    <div className="absolute bottom-[calc(100%-8px)] left-6 mb-2 bg-[#1A1140] border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl z-[100] w-64 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="p-1 bg-white/5 border-b border-white/5">
+                            <span className="text-[10px] font-black text-violet-400 px-3 py-1 uppercase tracking-widest">Mention someone</span>
+                        </div>
+                        <div 
+                            ref={mentionListRef}
+                            className="p-2 max-h-56 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-violet-500/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-violet-500/40"
+                        >
+                            {filteredMembers.map((m, idx) => (
+                                <button
+                                    key={m.user?._id}
+                                    onClick={() => handleMentionSelect(m.user)}
+                                    onMouseEnter={() => setSelectedMentionIdx(idx)}
+                                    className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all ${idx === selectedMentionIdx ? 'bg-violet-600/40 border border-violet-500/30' : 'hover:bg-white/5 border border-transparent'}`}
+                                >
+                                    <div className="relative">
+                                        <img 
+                                            src={m.user?.profilePic || `https://ui-avatars.com/api/?name=${m.user?.username}&background=random`} 
+                                            className="w-8 h-8 rounded-full object-cover ring-1 ring-white/10"
+                                            alt=""
+                                        />
+                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-[#1A1140]" />
+                                    </div>
+                                    <div className="flex-1 text-left overflow-hidden">
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-xs font-bold text-gray-200 truncate">{m.user?.displayName || m.user?.username}</p>
+                                            {(m.role === 'admin' || (circle.creator?._id || circle.creator) === (m.user?._id || m.user)) && (
+                                                <span className="text-[8px] bg-violet-500/20 text-violet-400 border border-violet-500/30 px-1 rounded font-black uppercase tracking-tighter">Host</span>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-gray-500 truncate">@{m.user?.username}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Reply */}
+                {replyingTo && (
+                    <div className="mb-2 bg-[#1A1140]/80 backdrop-blur-md border-l-4 border-violet-500 rounded-r-2xl p-3 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
+                        <div className="flex-1">
+                            <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1">Replying to {replyingTo.name}</p>
+                            <p className="text-xs text-gray-400 line-clamp-1 italic">"{replyingTo.text}"</p>
+                        </div>
+                        <button onClick={() => setReplyingTo(null)} className="p-1.5 text-gray-500 hover:text-white rounded-full"><X size={16} /></button>
+                    </div>
+                )}
+
+                <div className="flex items-center gap-3 bg-[#0F0529]/80 border border-[#2A1550] rounded-2xl px-4 py-2 hover:border-violet-500/30 transition-all group/input focus-within:ring-2 focus-within:ring-violet-500/20 shadow-inner backdrop-blur-md">
+                    <input
+                        type="text"
+                        value={messageInput}
+                        onChange={e => handleInputChange(e.target.value, e.target.selectionStart)}
+                        onKeyUp={e => {
+                            if (e.key === '@' || e.key === 'Backspace' || (e.key.length === 1)) {
+                                handleInputChange(e.target.value, e.target.selectionStart);
+                            }
+                        }}
+                        onClick={e => handleInputChange(e.target.value, e.target.selectionStart)}
+                        onKeyDown={handleInputKeyDown}
+                        placeholder={isMuted ? "Muted..." : replyingTo ? "Type your reply..." : "Share something with the circle..."}
+                        disabled={isMuted}
+                        className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none py-2"
+                    />
+
+                    <div className="flex items-center gap-1 shrink-0 relative" ref={emojiPickerRef}>
+                         <button 
+                            type="button" 
+                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                            className={`p-2 transition-colors rounded-xl ${showEmojiPicker ? 'text-violet-400 bg-violet-400/10' : 'text-gray-500 hover:text-fuchsia-400 hover:bg-fuchsia-500/10'}`}
+                        >
+                            <Smile size={20} />
+                        </button>
+
+                        {showEmojiPicker && (
+                            <div className="absolute bottom-full right-0 mb-4 bg-[#1A1140] border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl z-[100] w-72 overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+                                <div className="flex bg-black/20 p-1">
+                                    {emojiCategories.map(cat => (
+                                        <button key={cat.id} type="button" onClick={() => setActiveEmojiCategory(cat.id)} className={`flex-1 flex items-center justify-center py-2 rounded-lg ${activeEmojiCategory === cat.id ? 'bg-violet-600 text-white' : 'text-gray-500'}`}>{cat.icon}</button>
+                                    ))}
+                                </div>
+                                <div className="p-4 max-h-56 overflow-y-auto grid grid-cols-6 gap-3 bg-[#12082A]">
+                                    {emojiCategories.find(cat => cat.id === activeEmojiCategory).emojis.map((emoji, idx) => (
+                                        <button key={idx} type="button" onClick={() => setMessageInput(prev => prev + emoji)} className="text-2xl hover:scale-125 transition-transform flex items-center justify-center">{emoji}</button>
+                                    ))}
+                                </div>
+                                <div className="px-4 py-2 border-t border-white/5 bg-black/10 flex justify-between items-center text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                                    <span>{activeEmojiCategory}</span>
+                                    <button onClick={() => setShowEmojiPicker(false)} className="text-violet-400">Done</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <button
+                        disabled={!messageInput.trim() || isMuted}
+                        onClick={handleSend}
+                        className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center text-white shadow-lg disabled:opacity-30 transition-all"
+                    >
+                        <Send size={18} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default CircleChatArea;

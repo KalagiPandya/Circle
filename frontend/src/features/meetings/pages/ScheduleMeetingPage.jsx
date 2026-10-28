@@ -1,0 +1,291 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import FeedNavbar from '../../feed/components/FeedNavbar';
+import { Calendar, Clock, Video, Users, ArrowLeft, Check, Loader, AlertCircle, LayoutGrid } from 'lucide-react';
+import meetingService from '../services/meetingService';
+import axios from 'axios';
+import PremiumDropdown from '../../../components/ui/PremiumDropdown';
+
+const durationOptions = [
+    { value: 15, label: '15 mins' },
+    { value: 30, label: '30 mins' },
+    { value: 45, label: '45 mins' },
+    { value: 60, label: '1 hour' },
+    { value: 90, label: '1.5 hours' },
+    { value: 120, label: '2 hours' }
+];
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
+const ScheduleMeetingPage = () => {
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({
+        title: '',
+        circle: '',
+        date: '',
+        time: '',
+        description: '',
+        scheduledDuration: 60,
+    });
+    const [successMsg, setSuccessMsg] = useState('');
+    const [myCircles, setMyCircles] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [errors, setErrors] = useState({});
+
+    const validate = () => {
+        const newErrors = {};
+        if (!formData.title.trim()) newErrors.title = 'Meeting title is required';
+        if (!formData.circle) newErrors.circle = 'Please select a community circle';
+        if (!formData.date) newErrors.date = 'Meeting date is required';
+        if (!formData.time) newErrors.time = 'Meeting time is required';
+        
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleChange = (e) => {
+        const { id, value } = e.target;
+        const fieldName = id.replace('meeting-', '');
+        setFormData(prev => ({ ...prev, [fieldName]: value }));
+        if (errors[fieldName]) {
+            setErrors(prev => ({ ...prev, [fieldName]: '' }));
+        }
+        setError(null);
+    };
+
+    useEffect(() => {
+        const fetchCircles = async () => {
+            try {
+                const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                const res = await axios.get(`${BACKEND_URL}/api/meetings/eligible-circles`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
+                if (res.data.success) {
+                    setMyCircles(res.data.data || []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch user circles", err);
+            }
+        };
+
+        fetchCircles();
+    }, []);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!validate()) return;
+        
+        setLoading(true);
+        setError(null);
+        try {
+            // Combine date and time
+            const dateTimeString = `${formData.date}T${formData.time}:00`;
+            const startTime = new Date(dateTimeString).toISOString();
+
+            if (new Date(dateTimeString) < new Date()) {
+                setError("Meeting date and time cannot be set in the past.");
+                setLoading(false);
+                return;
+            }
+
+            const payload = {
+                title: formData.title,
+                description: formData.description,
+                startTime,
+                scheduledDuration: formData.scheduledDuration,
+                circle: formData.circle || undefined,
+                settings: {
+                    requirePassword: false
+                }
+            };
+
+            await meetingService.createMeeting(payload);
+            setSuccessMsg('Meeting scheduled successfully!');
+            setTimeout(() => {
+                navigate('/meetings');
+            }, 2000);
+        } catch (err) {
+            console.error('Error creating meeting:', err);
+            setError(err.response?.data?.message || 'Failed to schedule Zoom meeting. Please verify your Zoom credentials or try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-[#0F0529] text-white font-sans relative">
+            <FeedNavbar activePage="Meetings" />
+
+            {/* Success Toast */}
+            {successMsg && (
+                <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="bg-green-600 text-white px-8 py-4 rounded-2xl shadow-2xl shadow-green-900/40 flex items-center gap-3 border border-green-500/20">
+                        <Check size={20} />
+                        <span className="font-bold tracking-wide">{successMsg}</span>
+                    </div>
+                </div>
+            )}
+
+            <main className="max-w-2xl mx-auto px-6 py-12">
+                <button
+                    onClick={() => navigate('/meetings')}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8 group"
+                >
+                    <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+                    <span>Back to Meetings</span>
+                </button>
+
+                <div className="bg-[#1A0833] rounded-3xl p-8 border border-white/5 shadow-2xl">
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold mb-2">Schedule a Meeting</h1>
+                        <p className="text-gray-400">Plan a live sync or workshop for your community.</p>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-xl mb-6 text-sm">
+                            {error}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-gray-400 ml-1">Meeting Title</label>
+                                <input
+                                    id="meeting-title"
+                                    type="text"
+                                    placeholder="e.g., Weekly Design Sync"
+                                    className={`w-full bg-[#0F0529] border rounded-xl px-4 py-3 focus:outline-none transition-colors ${errors.title ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`}
+                                    value={formData.title}
+                                    onChange={handleChange}
+                                />
+                                {errors.title && (
+                                    <div className="flex items-center mt-1 text-red-500 text-xs gap-1 ml-1">
+                                        <AlertCircle size={12} />
+                                        <span>{errors.title}</span>
+                                    </div>
+                                )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+                            <div className="space-y-2 relative z-[20]">
+                                <label className="text-sm font-semibold text-gray-400 ml-1 flex items-center gap-2">
+                                    <Users size={14} /> Select Circle (Optional)
+                                </label>
+                                <PremiumDropdown 
+                                    value={formData.circle}
+                                    onChange={(val) => setFormData(prev => ({ ...prev, circle: val }))}
+                                    options={myCircles.map(c => ({ value: c._id, label: c.name }))}
+                                    icon={LayoutGrid}
+                                    placeholder="Choose a community"
+                                />
+                                {errors.circle && (
+                                    <div className="flex items-center mt-1 text-red-500 text-xs gap-1 ml-1">
+                                        <AlertCircle size={12} />
+                                        <span>{errors.circle}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2 relative z-[10]">
+                                <label className="text-sm font-semibold text-gray-400 ml-1 flex items-center gap-2">
+                                    <Video size={14} /> Platform
+                                </label>
+                                <div className="w-full bg-[#0F0529]/50 border border-white/5 rounded-2xl px-5 py-3 text-sm font-medium text-gray-500 flex items-center gap-3">
+                                    <Video size={16} className="text-gray-600" />
+                                    <span>Zoom (Auto-connected)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-400 ml-1 flex items-center gap-2">
+                                    <Calendar size={14} /> Date
+                                </label>
+                                <input
+                                    id="meeting-date"
+                                    type="date"
+                                    className={`w-full bg-[#0F0529] border rounded-xl px-4 py-3 focus:outline-none transition-colors invert-calendar-icon ${errors.date ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`}
+                                    value={formData.date}
+                                    min={new Date().toLocaleDateString('en-CA')}
+                                    onChange={handleChange}
+                                />
+                                {errors.date && (
+                                    <div className="flex items-center mt-1 text-red-500 text-xs gap-1 ml-1">
+                                        <AlertCircle size={12} />
+                                        <span>{errors.date}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-400 ml-1 flex items-center gap-2">
+                                    <Clock size={14} /> Time
+                                </label>
+                                <input
+                                    id="meeting-time"
+                                    type="time"
+                                    className={`w-full bg-[#0F0529] border rounded-xl px-4 py-3 focus:outline-none transition-colors invert-calendar-icon ${errors.time ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`}
+                                    value={formData.time}
+                                    onChange={handleChange}
+                                />
+                                {errors.time && (
+                                    <div className="flex items-center mt-1 text-red-500 text-xs gap-1 ml-1">
+                                        <AlertCircle size={12} />
+                                        <span>{errors.time}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2 relative z-[15]">
+                                <label className="text-sm font-semibold text-gray-400 ml-1 flex items-center gap-2">
+                                    <Clock size={14} /> Duration
+                                </label>
+                                <PremiumDropdown 
+                                    value={formData.scheduledDuration}
+                                    onChange={(val) => setFormData(prev => ({ ...prev, scheduledDuration: val }))}
+                                    options={durationOptions}
+                                    icon={Clock}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-gray-400 ml-1">Description (Agenda)</label>
+                            <textarea
+                                id="meeting-description"
+                                rows="3"
+                                placeholder="What will this meeting be about?"
+                                className="w-full bg-[#0F0529] border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500/50 transition-colors resize-none"
+                                value={formData.description}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            ></textarea>
+                        </div>
+
+                        <button
+                            id="schedule-meeting-btn"
+                            type="submit"
+                            disabled={loading}
+                            className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-4 
+                                ${loading 
+                                    ? 'bg-purple-600/50 cursor-not-allowed' 
+                                    : 'bg-purple-600 hover:bg-purple-500 shadow-purple-500/20'}`}
+                        >
+                            {loading ? (
+                                <Loader id="meeting-loader" size={20} className="animate-spin" />
+                            ) : (
+                                <Check size={20} />
+                            )}
+                            {loading ? 'Generating Zoom Room...' : 'Schedule Meeting'}
+                        </button>
+                    </form>
+                </div>
+            </main>
+        </div>
+    );
+};
+
+export default ScheduleMeetingPage;

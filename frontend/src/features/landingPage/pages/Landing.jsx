@@ -1,0 +1,39 @@
+import React, { useState, useEffect } from 'react';
+import Navbar from "../../../components/Navbar";
+import Hero from "../components/Hero";
+import Features from "../components/Features";
+import Footer from "../../../components/Footer";
+import HowItWorks from "../components/HowItWorks";
+import TrendingCommunities from "../components/TrendingCommunities";
+import CTASection from "../components/CTASection";
+
+export default function Landing() {
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [user, setUser] = useState(null);
+
+    useEffect(() => {
+        // Check if user is logged in
+        const token = localStorage.getItem('token');
+        const userData = localStorage.getItem('user');
+        
+        if (token && userData) {
+            setIsLoggedIn(true);
+            setUser(JSON.parse(userData));
+        } else {
+            setIsLoggedIn(false);
+            setUser(null);
+        }
+    }, []);
+
+    return (
+        <div className="min-h-screen bg-[#0F0529] text-white">
+            <Navbar isLoggedIn={isLoggedIn} user={user} />
+            <Hero />
+            <Features />
+            <HowItWorks />
+            <TrendingCommunities />
+            <CTASection />
+            <Footer />
+        </div>
+    );
+}
