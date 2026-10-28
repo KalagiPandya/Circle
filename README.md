@@ -224,12 +224,7 @@ MIT License – feel free to use this project for learning and portfolio purpose
 
 ---
 
-## 👥 Team
 
-- **Developer** – [Khushi Pal](https://github.com/kkhushi)  [Sakina Kheraj](https://github.com/SakinaKheraj) [Maryam Shaikh](https://github.com/mshaikh19)  [Anistina Dsouza](https://github.com/Anistina-Dsouza)
-- **Project Link** – [https://github.com/Anistina-Dsouza/circle](https://github.com/Anistina-Dsouza/Circle)
-
----
 
 <div align="center">
   Made with ❤️
