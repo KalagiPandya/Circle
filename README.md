@@ -106,13 +106,13 @@ circle-app/
 
 **1. Clone the repository**
 ```bash
-git clone https://github.com/your-username/circle-app.git
-cd circle-app
+git clone https://github.com/KalagiPandya/Circle.git
+cd Circle
 ```
 
 **2. Backend setup**
 ```bash
-cd server
+cd backend
 npm install
 cp .env.example .env   # Add your credentials
 npm run dev            # Runs on http://localhost:3000
@@ -120,28 +120,29 @@ npm run dev            # Runs on http://localhost:3000
 
 **3. Frontend setup**
 ```bash
-cd client
+cd frontend
 npm install
-cp .env.example .env.local   # Add backend URL
-npm run dev                     # Runs on http://localhost:5173
+cp .env.example .env   # Add backend URL
+npm run dev            # Runs on http://localhost:5173
 ```
 
 ---
 
 ## 🔧 Environment Variables
 
-### Backend (`server/.env`)
+### Backend (`backend/.env`)
 ```env
 PORT=3000
-MONGODB_URI=your_mongodb_connection_string
+MONGODB_URI=your_mongodb_atlas_connection_string
 JWT_SECRET=your_jwt_secret_key
 CLIENT_URL=http://localhost:5173
 ```
 
-### Frontend (`client/.env.local`)
+### Frontend (`frontend/.env`)
 ```env
-REACT_APP_API_URL=http://localhost:5000/api
-REACT_APP_SOCKET_URL=http://localhost:5000
+VITE_API_URL=http://localhost:3000
+VITE_SOCKET_URL=http://localhost:3000
+VITE_BACKEND_URL=http://localhost:3000
 ```
 
 ---
@@ -190,13 +191,13 @@ Or register a new account at `/signup`
 
 ---
 
-## 📦 Deployment
+## 📦 Deployment & Live Demo
 
-| Service | Platform | URL |
-|---------|----------|-----|
-| Frontend | Vercel | [`https://circle-wheat-eight.vercel.app`](https://circle-wheat-eight.vercel.app) |
-| Backend | Render | [`https://circle-api-77v3.onrender.com`](https://circle-api-77v3.onrender.com) |
-| Database | MongoDB Atlas | Cluster0 (AWS Mumbai) |
+| Service | Platform | Live URL | Status |
+|:---|:---|:---|:---|
+| **Frontend** | **Vercel** | [https://circle-wheat-eight.vercel.app](https://circle-wheat-eight.vercel.app) | 🟢 Live |
+| **Backend API** | **Render** | [https://circle-api-77v3.onrender.com](https://circle-api-77v3.onrender.com) | 🟢 Live |
+| **Database** | **MongoDB Atlas** | `Cluster0 (AWS Mumbai)` | 🟢 Connected |
 
 ---
 
@@ -213,8 +214,15 @@ Or register a new account at `/signup`
 ## 📈 Project Status
 
 ✅ **Phase 1-4 Complete** – Authentication, Users, Circles, Moments  
-⏳ **Phase 5-7 In Progress** – Huddles, RoundTables, Notifications  
-🚀 **Production Ready** – Deployed and tested
+✅ **Phase 5-7 Complete** – Huddles, RoundTables, Notifications  
+🚀 **Production Ready** – Deployed and tested live on Vercel & Render
+
+---
+
+## 👤 Author
+
+- **Kalagi Pandya** – [@KalagiPandya](https://github.com/KalagiPandya)
+- **Repository** – [https://github.com/KalagiPandya/Circle](https://github.com/KalagiPandya/Circle)
 
 ---
 
@@ -224,8 +232,6 @@ MIT License – feel free to use this project for learning and portfolio purpose
 
 ---
 
-
-
 <div align="center">
-  Made with ❤️
+  Made with ❤️ by Kalagi Pandya
 </div>
